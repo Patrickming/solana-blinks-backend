@@ -1,0 +1,13 @@
+-- 添加avatar字段（如果不存在）
+ALTER TABLE users ADD COLUMN avatar VARCHAR(255) DEFAULT '';
+
+-- 验证字段是否存在
+SELECT 
+  COLUMN_NAME, 
+  DATA_TYPE 
+FROM 
+  INFORMATION_SCHEMA.COLUMNS 
+WHERE 
+  TABLE_SCHEMA = DATABASE() AND 
+  TABLE_NAME = 'users' AND
+  COLUMN_NAME = 'avatar'; 
