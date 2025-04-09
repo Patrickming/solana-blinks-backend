@@ -93,6 +93,9 @@ app.get('/api/status', (req, res) => {
 // 用户相关路由
 app.use('/api/users', require('./routes/users'));
 
+// 论坛相关路由
+app.use('/api/forum', require('./routes/forum'));
+
 // 404处理 - 当没有匹配的路由时
 app.use((req, res) => {
   logger.warn(`路由未找到: ${req.method} ${req.originalUrl}`);

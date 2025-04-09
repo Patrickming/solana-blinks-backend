@@ -375,19 +375,94 @@ exports.deleteUserAccount = async (req, res, next) => {
   try {
     // 获取用户ID（从身份验证中间件中）
     const userId = req.user.id;
+    logger.info('开始处理删除用户账户请求', { userId });
     
-    // 删除用户 - 使用MySQL方法
-    const [result] = await pool.execute(
-      'DELETE FROM users WHERE id = ?',
-      [userId]
-    );
+    const connection = await pool.getConnection();
     
-    if (result.affectedRows > 0) {
-      logger.info('用户账户已删除', { userId });
-      res.json({ message: '用户账户已成功删除' });
-    } else {
-      logger.warn('删除账户失败：用户不存在', { userId });
-      res.status(404).json({ message: '用户不存在' });
+    try {
+      await connection.beginTransaction();
+      
+      // 1. 将用户的评论标记为已删除
+      logger.info('将用户的评论标记为已删除', { userId });
+      await connection.execute(
+        'UPDATE comments SET status = "deleted", content = "[已删除]" WHERE author_id = ?',
+        [userId]
+      );
+      
+      // 2. 更新相关话题的评论计数
+      logger.info('更新相关话题的评论计数', { userId });
+      await connection.execute(`
+        UPDATE topics t 
+        JOIN (
+            SELECT topic_id, COUNT(*) as deleted_count 
+            FROM comments 
+            WHERE author_id = ? AND status = 'deleted' 
+            GROUP BY topic_id
+        ) c_deleted ON t.id = c_deleted.topic_id
+        SET t.comments_count = GREATEST(0, t.comments_count - c_deleted.deleted_count)
+      `, [userId]);
+
+      // 3. 删除用户在所有话题上的点赞记录 (无论话题作者是谁)
+      logger.info('删除用户在所有话题上的点赞', { userId });
+      await connection.execute(
+        'DELETE FROM topic_likes WHERE user_id = ?',
+        [userId]
+      );
+      
+      // 4. 删除用户在所有评论上的点赞记录 (无论评论作者是谁)
+      logger.info('删除用户在所有评论上的点赞', { userId });
+      await connection.execute(
+        'DELETE FROM comment_likes WHERE user_id = ?',
+        [userId]
+      );
+
+      // 5. 删除其他用户对该用户话题的点赞
+      logger.info('删除其他用户对该用户话题的点赞', { userId });
+      await connection.execute(
+        'DELETE FROM topic_likes WHERE topic_id IN (SELECT id FROM topics WHERE author_id = ?)',
+        [userId]
+      );
+
+      // 6. 删除其他用户对该用户评论的点赞
+      logger.info('删除其他用户对该用户评论的点赞', { userId });
+      await connection.execute(
+        'DELETE FROM comment_likes WHERE comment_id IN (SELECT id FROM comments WHERE author_id = ?)',
+        [userId]
+      );
+      
+      // 7. 将用户的话题标记为已删除
+      logger.info('将用户的话题标记为已删除', { userId });
+      await connection.execute(
+        'UPDATE topics SET status = "deleted" WHERE author_id = ?',
+        [userId]
+      );
+      
+      // 8. 最后删除用户
+      logger.info('删除用户记录', { userId });
+      const [result] = await connection.execute(
+        'DELETE FROM users WHERE id = ?',
+        [userId]
+      );
+      
+      await connection.commit();
+      
+      if (result.affectedRows > 0) {
+        logger.info('用户账户已删除', { userId });
+        res.json({ message: '用户账户已成功删除' });
+      } else {
+        logger.warn('删除账户失败：用户不存在', { userId });
+        res.status(404).json({ message: '用户不存在' });
+      }
+    } catch (error) {
+      await connection.rollback();
+      // 检查是否是外键约束错误
+      if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.errno === 1451) {
+        logger.error('删除用户失败：外键约束冲突，可能仍有未处理的关联数据', { userId, error });
+        return res.status(400).json({ message: '删除用户失败，可能存在关联数据，请联系管理员' });
+      }
+      throw error;
+    } finally {
+      connection.release();
     }
   } catch (error) {
     logger.error('删除账户过程中发生错误', error);
