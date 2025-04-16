@@ -311,10 +311,10 @@ exports.getUserProfile = async (req, res, next) => {
  */
 exports.updateUserPassword = async (req, res, next) => {
   try {
-    const { currentPassword, newPassword, confirmPassword } = req.body;
+    const { newPassword, confirmPassword } = req.body;
     
     // 输入验证
-    if (!currentPassword || !newPassword || !confirmPassword) {
+    if (!newPassword || !confirmPassword) {
       logger.warn('更新密码失败：缺少必要字段');
       return res.status(400).json({ message: '所有字段都是必需的' });
     }
@@ -340,14 +340,6 @@ exports.updateUserPassword = async (req, res, next) => {
     if (!user) {
       logger.warn('更新密码失败：用户不存在', { userId });
       return res.status(404).json({ message: '用户不存在' });
-    }
-    
-    // 验证当前密码 - 使用MySQL方法
-    const isMatch = await User.verifyPassword(currentPassword, user.password);
-    
-    if (!isMatch) {
-      logger.warn('更新密码失败：当前密码不正确', { userId });
-      return res.status(400).json({ message: '当前密码不正确' });
     }
     
     // 更新密码 - 使用MySQL方法

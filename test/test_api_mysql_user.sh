@@ -224,7 +224,6 @@ PASSWORD_UPDATE_RESPONSE=$(curl -s -X PUT "$BASE_URL/api/users/password" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
-    "currentPassword": "password123",
     "newPassword": "newpassword123",
     "confirmPassword": "newpassword123"
   }')
@@ -242,35 +241,7 @@ else
   echo -e "${YELLOW}实际: $PASSWORD_UPDATE_RESPONSE${NC}"
 fi
 
-echo "4.2 测试错误的当前密码（应失败）"
-# 预期响应：
-# 状态码：400
-# {
-#   "message": "当前密码不正确"
-# }
-WRONG_PASSWORD_RESPONSE=$(curl -s -X PUT "$BASE_URL/api/users/password" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{
-    "currentPassword": "wrongpassword",
-    "newPassword": "newpassword456",
-    "confirmPassword": "newpassword456"
-  }')
-
-echo "错误密码响应: $WRONG_PASSWORD_RESPONSE"
-
-# 检查响应是否包含错误消息
-PASSWORD_ERROR_CHECK=$(echo $WRONG_PASSWORD_RESPONSE | grep -o '"message":"当前密码不正确"')
-
-if [ ! -z "$PASSWORD_ERROR_CHECK" ]; then
-  echo -e "${GREEN}✓ 测试通过: 错误密码被正确拒绝${NC}"
-else
-  echo -e "${RED}✗ 测试失败: 错误密码未被正确拒绝${NC}"
-  echo -e "${YELLOW}预期: 响应应包含密码错误消息${NC}"
-  echo -e "${YELLOW}实际: $WRONG_PASSWORD_RESPONSE${NC}"
-fi
-
-echo "4.3 测试新密码与确认密码不匹配（应失败）"
+echo "4.2 测试新密码与确认密码不匹配（应失败）"
 # 预期响应：
 # 状态码：400
 # {
@@ -280,7 +251,6 @@ MISMATCH_PASSWORD_RESPONSE=$(curl -s -X PUT "$BASE_URL/api/users/password" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
-    "currentPassword": "newpassword123",
     "newPassword": "password789",
     "confirmPassword": "different_password"
   }')
